@@ -74,7 +74,17 @@
       grid.innerHTML = '';
 
       fetch(`${GAS_API_URL}?date=${encodeURIComponent(dateVal)}`)
-        .then(res => res.json())
+        .then(async res => {
+          const body = await res.text();
+          if (!res.ok) {
+            throw new Error(`API ตอบกลับ HTTP ${res.status}: ${body.slice(0, 160)}`);
+          }
+          try {
+            return JSON.parse(body);
+          } catch (error) {
+            throw new Error(`API ไม่ได้ส่ง JSON กลับมา: ${body.slice(0, 160)}`);
+          }
+        })
         .then(res => {
           loading.style.display = 'none';
           if (!res.success) {
