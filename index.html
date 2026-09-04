@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="mobile-web-app-capable" content="yes">
   <title>ระบบตรวจการณ์ รปภ.</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -127,7 +124,7 @@
     let currentQueueCount = 0;
     let isUploading = false;
 
-    // 1. แจ้งเตือนเมื่อพยายามปิดแท็บ/ปิดเบราว์เซอร์ ถ้ายังมีรูปค้างอยู่
+    // แจ้งเตือนเมื่อพยายามปิดเบราว์เซอร์ขณะที่มีรูปค้าง
     window.addEventListener('beforeunload', function (e) {
       if (currentQueueCount > 0 && !isUploading) {
         e.preventDefault();
@@ -146,7 +143,7 @@
     request.onsuccess = function(e) {
       db = e.target.result;
       loadQueueFromDB();
-      checkAutoUploadThreshold(); // เช็กเวลาตั้งแต่เปิดเว็บ
+      checkAutoUploadThreshold();
     };
 
     setInterval(() => {
@@ -154,14 +151,14 @@
       if (el) el.innerText = new Date().toLocaleString('th-TH');
     }, 1000);
 
-    // 2. เช็กเวลาเมื่อผู้ใช้ปลดล็อกหน้าจอ หรือสลับกลับมาที่แท็บนี้
+    // เช็กเวลาอัตโนมัติเมื่อปลดล็อกหรือสลับกลับมาหน้าเว็บ
     document.addEventListener("visibilitychange", function() {
       if (document.visibilityState === "visible") {
         checkAutoUploadThreshold();
       }
     });
 
-    // ฟังก์ชันตรวจสอบหารูปที่ค้างนานเกิน 45 นาที
+    // ตรวจสอบภาพที่ค้างนานเกิน 45 นาทีโดยเทียบจากภาพแรกสุดในคิว
     function checkAutoUploadThreshold() {
       if (!db || isUploading) return;
       const tx = db.transaction(["patrol_queue"], "readonly");
@@ -171,7 +168,6 @@
         const items = req.result;
         if (!items || items.length === 0) return;
 
-        // ดึงเวลาของรูปที่เก่าที่สุดในคิวที่ค้างอยู่
         const validTimestamps = items.map(it => it.timestamp).filter(t => typeof t === 'number' && t > 0);
         if (validTimestamps.length === 0) return;
 
@@ -179,11 +175,56 @@
         const diffMinutes = (Date.now() - oldestTime) / (1000 * 60);
 
         if (diffMinutes >= 45) {
-          console.log("ตรวจพบภาพค้างนานเกิน 45 นาที สั่งอัปโหลดอัตโนมัติ...");
+          console.log("ตรวจพบภาพค้างเกิน 45 นาที สั่งอัปโหลดอัตโนมัติ...");
           submitBatch(true);
         }
       };
     }
+
+    // เกาะติดสัญญาณ GPS แบบสดตลอดเวลา
+    window.onload = function() {
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+          (pos) => {
+            currentCoordinates.lat = pos.coords.latitude.toFixed(6);
+            currentCoordinates.lng = pos.coords.longitude.toFixed(6);
+          }, 
+          (err) => {
+            console.warn("ไม่สามารถรับพิกัดได้:", err.message);
+          }, 
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        );
+      }
+    };
+
+    document.getElementById('cameraInput').addEventListener('change', function(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const now = Date.now();
+      const fileAgeSeconds = Math.abs(now - file.lastModified) / 1000;
+
+      if (fileAgeSeconds > 35) {
+        alert("⚠️ ไม่อนุญาตให้เลือกรูปจากคลังภาพ!\n\nกรุณากดถ่ายภาพสดจากสถานที่ตรวจการณ์เท่านั้น");
+        document.getElementById('cameraInput').value = '';
+        return;
+      }
+
+      const overlay = document.getElementById('loadingOverlay');
+      document.getElementById('loadingText').innerText = "กำลังประทับเวลาและบันทึกลงเครื่อง...";
+      overlay.style.display = 'flex';
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          processAndSaveToDB(img);
+          overlay.style.display = 'none';
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
 
     function processAndSaveToDB(img) {
       const canvas = document.getElementById('photoCanvas');
@@ -245,7 +286,7 @@
         fileTimeStr: fileTimeStr,
         lat: currentCoordinates.lat,
         lng: currentCoordinates.lng,
-        timestamp: Date.now(), // บันทึกเวลาไว้ใช้ตรวจสอบ 45 นาที
+        timestamp: Date.now(),
         base64Image: base64Data
       };
 
@@ -303,7 +344,7 @@
         if (items.length === 0) return;
 
         if (!isAuto) {
-          if (!confirm(`ยืนยันการส่งรายงานทั้งหมด ${items.length} รูป ขึ้นระบบใช่หรือไม่?`)) return;
+          if (!confirm(`ยืนยันการส่งรายงานทั้งหมด ${items.length} รูป ใช่หรือไม่?`)) return;
         }
 
         isUploading = true;
@@ -318,7 +359,7 @@
 
         for (let i = 0; i < total; i++) {
           const item = items[i];
-          loadingText.innerText = (isAuto ? "⚡ ระบบส่งอัตโนมัติ (ค้างเกิน 45 น.): " : "") + 
+          loadingText.innerText = (isAuto ? "⚡ ส่งอัตโนมัติ (ค้างเกิน 45 น.): " : "") + 
                                   `ส่งรูปที่ ${i + 1} จาก ${total} รูป...`;
 
           try {
@@ -328,7 +369,7 @@
             progressBar.style.width = `${Math.round((completed / total) * 100)}%`;
           } catch (err) {
             isUploading = false;
-            alert(`รูปที่ ${i + 1} ส่งไม่สำเร็จ: ${err}\nภาพที่เหลือยังอยู่ในเครื่อง สามารถกดยิงซ้ำได้`);
+            alert(`รูปที่ ${i + 1} ส่งไม่สำเร็จ: ${err}\nภาพที่เหลือยังอยู่ในเครื่อง สามารถกดส่งซ้ำได้`);
             overlay.style.display = 'none';
             loadQueueFromDB();
             return;
