@@ -95,7 +95,7 @@
             const item = document.createElement('div');
             item.className = 'card-item';
             item.innerHTML = `
-              <img class="card-img" src="${log.imgSrc}" loading="lazy" onclick="openModal(this.src)" onerror="this.onerror=null; this.src='${log.fileImageSrc || log.fileUrl}';">
+              <img class="card-img" src="${log.imgSrc || log.fileImageSrc || log.fileUrl}" loading="lazy" referrerpolicy="no-referrer" onclick="openModal(this.src)" onerror="this.onerror=null; this.src='${log.fileImageSrc || log.fileUrl}';">
               <div class="card-body">
                 <div class="checkpoint-badge">${log.checkpoint}</div>
                 <p><strong>เวลา:</strong> ${log.captureTime}</p>
