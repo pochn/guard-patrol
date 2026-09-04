@@ -101,17 +101,18 @@
             const mapLink = (log.lat && log.lat !== "N/A") 
               ? `<a href="https://maps.google.com/?q=${log.lat},${log.lng}" target="_blank" style="color: #0284c7;">📍 ดูแผนที่พิกัด</a>` 
               : `<span>📍 ไม่พบพิกัด</span>`;
+            const displayImg = log.imgSrc || 'https://placehold.co/400x300?text=No+Image';
 
             const item = document.createElement('div');
             item.className = 'card-item';
             item.innerHTML = `
                   <img class="card-img"
-                    src="${log.imgSrc}"
+                    src="${displayImg}"
                     loading="lazy"
                     referrerpolicy="no-referrer"
                     alt="${log.checkpoint}"
-                    onclick="openModal('${log.imgSrc}')"
-                    onerror="this.onerror=null; this.src='https://placehold.co/400x300?text=กำลังโหลดภาพ...';">
+                    onclick="openModal(this.src)"
+                    onerror="this.onerror=null; this.src='https://placehold.co/400x300?text=No+Image';">
               <div class="card-body">
                 <div class="checkpoint-badge">${log.checkpoint}</div>
                 <p><strong>เวลา:</strong> ${log.captureTime}</p>
