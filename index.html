@@ -85,7 +85,7 @@
         <div id="thumbnailList" class="thumbnail-list"></div>
       </div>
 
-      <button type="button" id="uploadBatchBtn" class="btn btn-submit" style="display: none;" onclick="submitBatch()">
+      <button type="button" id="uploadBatchBtn" class="btn btn-submit" style="display: none;" onclick="submitBatch(false)">
         🚀 ส่งรายงานทั้งหมดพร้อมกัน (<span id="batchBtnCount">0</span>)
       </button>
 
@@ -121,6 +121,17 @@
 
     let db;
     let currentCoordinates = { lat: null, lng: null };
+    let currentQueueCount = 0;
+    let isUploading = false;
+
+    // 1. แจ้งเตือนเมื่อพยายามปิดแท็บ/ปิดเบราว์เซอร์ ถ้ายังมีรูปค้างอยู่
+    window.addEventListener('beforeunload', function (e) {
+      if (currentQueueCount > 0 && !isUploading) {
+        e.preventDefault();
+        e.returnValue = 'ยังมีรูปภาพตรวจการณ์ค้างอยู่ในเครื่อง กรุณากดส่งรายงานก่อนปิดหน้าจอ';
+        return e.returnValue;
+      }
+    });
 
     const request = indexedDB.open("PatrolDB", 1);
     request.onupgradeneeded = function(e) {
@@ -132,12 +143,45 @@
     request.onsuccess = function(e) {
       db = e.target.result;
       loadQueueFromDB();
+      checkAutoUploadThreshold(); // เช็กเวลาตั้งแต่เปิดเว็บ
     };
 
     setInterval(() => {
       const el = document.getElementById('liveClock');
       if (el) el.innerText = new Date().toLocaleString('th-TH');
     }, 1000);
+
+    // 2. เช็กเวลาเมื่อผู้ใช้ปลดล็อกหน้าจอ หรือสลับกลับมาที่แท็บนี้
+    document.addEventListener("visibilitychange", function() {
+      if (document.visibilityState === "visible") {
+        checkAutoUploadThreshold();
+      }
+    });
+
+    // ฟังก์ชันตรวจสอบหารูปที่ค้างนานเกิน 45 นาที
+    function checkAutoUploadThreshold() {
+      if (!db || isUploading) return;
+      const tx = db.transaction(["patrol_queue"], "readonly");
+      const req = tx.objectStore("patrol_queue").getAll();
+
+      req.onsuccess = function() {
+        const items = req.result;
+        if (!items || items.length === 0) return;
+
+        // ดึงรูปล่าสุดมาตรวจดูเวลา
+        const latestItem = items[items.length - 1];
+        const itemTime = latestItem.timestamp || 0;
+        const now = Date.now();
+
+        // 45 นาที = 45 * 60 * 1000 = 2,700,000 มิลลิวินาที
+        const diffMinutes = (now - itemTime) / (1000 * 60);
+
+        if (diffMinutes >= 45) {
+          console.log("พบรูปค้างเกิน 45 นาที กำลังเริ่มส่งข้อมูลอัตโนมัติ...");
+          submitBatch(true); // สั่งส่งอัตโนมัติ
+        }
+      };
+    }
 
     window.onload = function() {
       if (navigator.geolocation) {
@@ -241,6 +285,7 @@
         fileTimeStr: fileTimeStr,
         lat: currentCoordinates.lat,
         lng: currentCoordinates.lng,
+        timestamp: Date.now(), // บันทึกเวลาไว้ใช้ตรวจสอบ 45 นาที
         base64Image: base64Data
       };
 
@@ -273,10 +318,10 @@
           list.appendChild(div);
         });
 
-        const count = items.length;
-        document.getElementById('queueCount').innerText = `${count} รูป`;
-        document.getElementById('batchBtnCount').innerText = `${count}`;
-        document.getElementById('uploadBatchBtn').style.display = count > 0 ? 'block' : 'none';
+        currentQueueCount = items.length;
+        document.getElementById('queueCount').innerText = `${currentQueueCount} รูป`;
+        document.getElementById('batchBtnCount').innerText = `${currentQueueCount}`;
+        document.getElementById('uploadBatchBtn').style.display = currentQueueCount > 0 ? 'block' : 'none';
       };
     }
 
@@ -287,7 +332,9 @@
       tx.oncomplete = () => loadQueueFromDB();
     }
 
-    async function submitBatch() {
+    async function submitBatch(isAuto = false) {
+      if (isUploading) return;
+      
       const tx = db.transaction(["patrol_queue"], "readonly");
       const req = tx.objectStore("patrol_queue").getAll();
 
@@ -295,8 +342,11 @@
         const items = req.result;
         if (items.length === 0) return;
 
-        if (!confirm(`ยืนยันการส่งรายงานทั้งหมด ${items.length} รูป ขึ้นระบบใช่หรือไม่?`)) return;
+        if (!isAuto) {
+          if (!confirm(`ยืนยันการส่งรายงานทั้งหมด ${items.length} รูป ขึ้นระบบใช่หรือไม่?`)) return;
+        }
 
+        isUploading = true;
         const total = items.length;
         let completed = 0;
         const overlay = document.getElementById('loadingOverlay');
@@ -308,7 +358,8 @@
 
         for (let i = 0; i < total; i++) {
           const item = items[i];
-          loadingText.innerText = `กำลังส่งรูปที่ ${i + 1} จาก ${total} รูป...`;
+          loadingText.innerText = (isAuto ? "⚡ ระบบส่งอัตโนมัติ (ค้างเกิน 45 น.): " : "") + 
+                                  `ส่งรูปที่ ${i + 1} จาก ${total} รูป...`;
 
           try {
             await uploadSingleItem(item);
@@ -316,6 +367,7 @@
             completed++;
             progressBar.style.width = `${Math.round((completed / total) * 100)}%`;
           } catch (err) {
+            isUploading = false;
             alert(`รูปที่ ${i + 1} ส่งไม่สำเร็จ: ${err}\nภาพที่เหลือยังอยู่ในเครื่อง สามารถกดยิงซ้ำได้`);
             overlay.style.display = 'none';
             loadQueueFromDB();
@@ -323,8 +375,9 @@
           }
         }
 
+        isUploading = false;
         overlay.style.display = 'none';
-        alert(`✓ ส่งรายงานตรวจการณ์ครบทั้ง ${total} รูป เรียบร้อยแล้ว!`);
+        alert(`✓ ${isAuto ? 'ระบบส่งรายงานอัตโนมัติ' : 'ส่งรายงานตรวจการณ์'} ครบทั้ง ${total} รูป เรียบร้อยแล้ว!`);
         loadQueueFromDB();
       };
     }
