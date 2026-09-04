@@ -20,6 +20,19 @@
     .btn:active { opacity: 0.85; }
     .btn-camera { background-color: #0284c7; color: white; }
     .btn-submit { background-color: #16a34a; color: white; }
+    
+    .btn-dashboard { 
+      background-color: transparent; 
+      color: #0284c7; 
+      border: 1.5px solid #0284c7; 
+      text-decoration: none; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      gap: 6px; 
+      margin-top: 12px;
+    }
+    .btn-dashboard:hover { background-color: #f0f9ff; }
 
     .queue-section { margin-top: 18px; border-top: 1px dashed #cbd5e1; padding-top: 14px; }
     .queue-header { display: flex; justify-content: space-between; font-size: 0.95rem; margin-bottom: 10px; color: #334155; }
@@ -57,7 +70,6 @@
         </select>
       </div>
 
-      <!-- บังคับเรียกกล้องสด -->
       <input type="file" id="cameraInput" accept="image/*" capture="environment" style="position: absolute; opacity: 0; width: 1px; height: 1px;">
       <label for="cameraInput" class="btn btn-camera">
         📷 ถ่ายรูปตรวจการณ์ (สดจากสถานที่)
@@ -76,6 +88,12 @@
       <button type="button" id="uploadBatchBtn" class="btn btn-submit" style="display: none;" onclick="submitBatch()">
         🚀 ส่งรายงานทั้งหมดพร้อมกัน (<span id="batchBtnCount">0</span>)
       </button>
+
+      <a href="https://script.google.com/macros/s/AKfycbwAmSw68uxwE5LGEq94ul6ZOTUxqkPf6H2WALQ-nEM/exec" 
+         target="_blank" 
+         class="btn btn-dashboard">
+        📋 เปิดดูประวัติ / ตรวจสอบรูปภาพ
+      </a>
     </div>
 
     <div id="loadingOverlay" class="loading-overlay" style="display: none;">
@@ -88,7 +106,6 @@
   </div>
 
   <script>
-    // --- 1. ป้องกัน LINE In-App Browser (บังคับเด้งออก Chrome / Safari ทันที) ---
     (function checkLineBrowser() {
       const ua = navigator.userAgent || navigator.vendor || window.opera;
       if (ua.indexOf("Line") > -1) {
@@ -135,7 +152,6 @@
       }
     };
 
-    // --- 2. ดักตรวจจับเวลาไฟล์ (ป้องกันการเลือกรูปเก่าจาก Gallery) ---
     document.getElementById('cameraInput').addEventListener('change', function(e) {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -143,7 +159,6 @@
       const now = Date.now();
       const fileAgeSeconds = Math.abs(now - file.lastModified) / 1000;
 
-      // หากเวลาของไฟล์เก่าเกิน 35 วินาที แสดงว่าเปิดเลือกไฟล์เก่าจากในเครื่อง
       if (fileAgeSeconds > 35) {
         alert("⚠️ ระบบไม่อนุญาตให้เลือกรูปภาพจากคลังภาพ!\n\nกรุณากดถ่ายภาพสดจากสถานที่ตรวจการณ์เท่านั้น");
         document.getElementById('cameraInput').value = '';
@@ -201,7 +216,6 @@
       const shift = document.getElementById('shiftSelect').value;
       const locStr = currentCoordinates.lat ? `พิกัด: ${currentCoordinates.lat}, ${currentCoordinates.lng}` : 'ไม่พบพิกัด';
 
-      // แถบสแตมป์ขนาดกะทัดรัด (สูงประมาณ 5.5% ชิดขอบล่าง)
       const barHeight = Math.max(Math.round(canvas.height * 0.055), 32);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
