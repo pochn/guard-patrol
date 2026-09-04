@@ -168,62 +168,19 @@
         const items = req.result;
         if (!items || items.length === 0) return;
 
-        // ดึงรูปล่าสุดมาตรวจดูเวลา
-        const latestItem = items[items.length - 1];
-        const itemTime = latestItem.timestamp || 0;
-        const now = Date.now();
+        // ดึงเวลาของรูปที่เก่าที่สุดในคิวที่ค้างอยู่
+        const validTimestamps = items.map(it => it.timestamp).filter(t => typeof t === 'number' && t > 0);
+        if (validTimestamps.length === 0) return;
 
-        // 45 นาที = 45 * 60 * 1000 = 2,700,000 มิลลิวินาที
-        const diffMinutes = (now - itemTime) / (1000 * 60);
+        const oldestTime = Math.min(...validTimestamps);
+        const diffMinutes = (Date.now() - oldestTime) / (1000 * 60);
 
         if (diffMinutes >= 45) {
-          console.log("พบรูปค้างเกิน 45 นาที กำลังเริ่มส่งข้อมูลอัตโนมัติ...");
-          submitBatch(true); // สั่งส่งอัตโนมัติ
+          console.log("ตรวจพบภาพค้างนานเกิน 45 นาที สั่งอัปโหลดอัตโนมัติ...");
+          submitBatch(true);
         }
       };
     }
-
-    window.onload = function() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            currentCoordinates.lat = pos.coords.latitude.toFixed(6);
-            currentCoordinates.lng = pos.coords.longitude.toFixed(6);
-          }, 
-          null, 
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
-      }
-    };
-
-    document.getElementById('cameraInput').addEventListener('change', function(e) {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-
-      const now = Date.now();
-      const fileAgeSeconds = Math.abs(now - file.lastModified) / 1000;
-
-      if (fileAgeSeconds > 35) {
-        alert("⚠️ ระบบไม่อนุญาตให้เลือกรูปภาพจากคลังภาพ!\n\nกรุณากดถ่ายภาพสดจากสถานที่ตรวจการณ์เท่านั้น");
-        document.getElementById('cameraInput').value = '';
-        return;
-      }
-
-      const overlay = document.getElementById('loadingOverlay');
-      document.getElementById('loadingText').innerText = "กำลังประทับเวลาและบันทึกลงเครื่อง...";
-      overlay.style.display = 'flex';
-
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        const img = new Image();
-        img.onload = function() {
-          processAndSaveToDB(img);
-          overlay.style.display = 'none';
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
 
     function processAndSaveToDB(img) {
       const canvas = document.getElementById('photoCanvas');
