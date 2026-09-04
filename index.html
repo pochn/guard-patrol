@@ -57,9 +57,10 @@
         </select>
       </div>
 
+      <!-- บังคับเรียกกล้องสด -->
       <input type="file" id="cameraInput" accept="image/*" capture="environment" style="position: absolute; opacity: 0; width: 1px; height: 1px;">
       <label for="cameraInput" class="btn btn-camera">
-        📷 ถ่ายรูปตรวจการณ์ (สะสมในรอบ)
+        📷 ถ่ายรูปตรวจการณ์ (สดจากสถานที่)
       </label>
 
       <canvas id="photoCanvas" style="display: none;"></canvas>
@@ -87,6 +88,18 @@
   </div>
 
   <script>
+    // --- 1. ป้องกัน LINE In-App Browser (บังคับเด้งออก Chrome / Safari ทันที) ---
+    (function checkLineBrowser() {
+      const ua = navigator.userAgent || navigator.vendor || window.opera;
+      if (ua.indexOf("Line") > -1) {
+        const currentUrl = window.location.href;
+        if (currentUrl.indexOf("openExternalBrowser=1") === -1) {
+          const sep = currentUrl.indexOf("?") > -1 ? "&" : "?";
+          window.location.href = currentUrl + sep + "openExternalBrowser=1";
+        }
+      }
+    })();
+
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzYnHN2Yec1gJVkwWnjiNXkVJDDo4YCpxKcGdTybW48PE7Qoz_8a8Zw2EcuTO6NN4zp/exec";
 
     let db;
@@ -122,9 +135,20 @@
       }
     };
 
+    // --- 2. ดักตรวจจับเวลาไฟล์ (ป้องกันการเลือกรูปเก่าจาก Gallery) ---
     document.getElementById('cameraInput').addEventListener('change', function(e) {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
+
+      const now = Date.now();
+      const fileAgeSeconds = Math.abs(now - file.lastModified) / 1000;
+
+      // หากเวลาของไฟล์เก่าเกิน 35 วินาที แสดงว่าเปิดเลือกไฟล์เก่าจากในเครื่อง
+      if (fileAgeSeconds > 35) {
+        alert("⚠️ ระบบไม่อนุญาตให้เลือกรูปภาพจากคลังภาพ!\n\nกรุณากดถ่ายภาพสดจากสถานที่ตรวจการณ์เท่านั้น");
+        document.getElementById('cameraInput').value = '';
+        return;
+      }
 
       const overlay = document.getElementById('loadingOverlay');
       document.getElementById('loadingText').innerText = "กำลังประทับเวลาและบันทึกลงเครื่อง...";
@@ -142,7 +166,7 @@
       reader.readAsDataURL(file);
     });
 
-   function processAndSaveToDB(img) {
+    function processAndSaveToDB(img) {
       const canvas = document.getElementById('photoCanvas');
       const ctx = canvas.getContext('2d');
 
@@ -177,7 +201,7 @@
       const shift = document.getElementById('shiftSelect').value;
       const locStr = currentCoordinates.lat ? `พิกัด: ${currentCoordinates.lat}, ${currentCoordinates.lng}` : 'ไม่พบพิกัด';
 
-      // แถบสแตมป์กะทัดรัด บรรทัดเดียวเรียบร้อย
+      // แถบสแตมป์ขนาดกะทัดรัด (สูงประมาณ 5.5% ชิดขอบล่าง)
       const barHeight = Math.max(Math.round(canvas.height * 0.055), 32);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
