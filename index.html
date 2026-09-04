@@ -142,7 +142,7 @@
       reader.readAsDataURL(file);
     });
 
-    function processAndSaveToDB(img) {
+   function processAndSaveToDB(img) {
       const canvas = document.getElementById('photoCanvas');
       const ctx = canvas.getContext('2d');
 
@@ -166,7 +166,7 @@
       ctx.drawImage(img, 0, 0, width, height);
 
       const now = new Date();
-      const timeStr = 'เวลาตรวจ: ' + now.toLocaleString('th-TH');
+      const timeStr = 'เวลา: ' + now.toLocaleString('th-TH');
       const fileTimeStr = now.getFullYear() + 
         String(now.getMonth() + 1).padStart(2, '0') + 
         String(now.getDate()).padStart(2, '0') + '_' + 
@@ -175,21 +175,26 @@
         String(now.getSeconds()).padStart(2, '0');
 
       const shift = document.getElementById('shiftSelect').value;
-      const locStr = currentCoordinates.lat ? `พิกัด: ${currentCoordinates.lat}, ${currentCoordinates.lng}` : 'พิกัด: ไม่พบสัญญาณ';
+      const locStr = currentCoordinates.lat ? `พิกัด: ${currentCoordinates.lat}, ${currentCoordinates.lng}` : 'ไม่พบพิกัด';
 
-      const barHeight = Math.max(canvas.height * 0.1, 55);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      // แถบสแตมป์กะทัดรัด บรรทัดเดียวเรียบร้อย
+      const barHeight = Math.max(Math.round(canvas.height * 0.055), 32);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
 
+      const fontSize = Math.max(Math.round(barHeight * 0.42), 12);
+      const textBaselineY = canvas.height - Math.round(barHeight * 0.32);
+
       ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${Math.round(barHeight * 0.35)}px sans-serif`;
-      ctx.fillText(`${timeStr}`, 14, canvas.height - (barHeight * 0.52));
+      ctx.font = `600 ${fontSize}px sans-serif`;
+      ctx.fillText(timeStr, 12, textBaselineY);
 
-      ctx.fillStyle = '#fde047';
-      ctx.font = `${Math.round(barHeight * 0.28)}px sans-serif`;
-      ctx.fillText(`รปภ. (${shift}) | ${locStr}`, 14, canvas.height - (barHeight * 0.18));
+      const timeWidth = ctx.measureText(timeStr).width;
+      ctx.fillStyle = '#fef08a';
+      ctx.font = `500 ${fontSize}px sans-serif`;
+      ctx.fillText(` | รปภ. (${shift}) | ${locStr}`, 12 + timeWidth, textBaselineY);
 
-      const base64Data = canvas.toDataURL('image/jpeg', 0.65);
+      const base64Data = canvas.toDataURL('image/jpeg', 0.7);
 
       const record = {
         guardName: shift,
